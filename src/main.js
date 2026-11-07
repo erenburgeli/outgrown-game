@@ -3,10 +3,10 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { stageValues, clamp } from "./stage.js?v=mw6uc989";
-import { buildWorld, GROUND } from "./world.js?v=mw6uc989";
-import { Dino } from "./dino.js?v=mw6uc989";
-import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6uc989";
+import { stageValues, clamp } from "./stage.js?v=mw6uktv3";
+import { buildWorld, GROUND } from "./world.js?v=mw6uktv3";
+import { Dino } from "./dino.js?v=mw6uktv3";
+import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6uktv3";
 
 const $ = (id) => document.getElementById(id);
 
@@ -74,8 +74,9 @@ function placePint(m, s) {
       const ang = game.heading + (Math.random() - 0.5) * (tries < 8 ? 2.4 : 6.2), dist = s.size * (1.1 + Math.random() * 2.2) + 3;
       x = clamp(p.x + Math.cos(ang) * dist, -900, 1300); y = clamp(p.y + Math.sin(ang) * dist, -900, 900);
       const pad = k * 0.5 + 2;
+      if (tries === 13 && world) { x = clamp(p.x + Math.cos(game.heading) * (s.size * 2 + 5), -100, 1250); y = clamp(p.y * 0.2, -40, 40); } // fall back to the clear avenue
+      if (pints.some((o) => o !== m && o.visible && Math.hypot(o.position.x - x, o.position.y - y) < k * 2.4 + 4)) continue; // keep the beers spread out
       if (!world || !world.buildings.some((b) => !b.state && Math.abs(x - b.x) < b.w / 2 + pad && Math.abs(y - b.y) < b.d / 2 + pad)) break;
-      if (tries === 13) { x = clamp(p.x + Math.cos(game.heading) * (s.size * 2 + 5), -100, 1250); y = clamp(p.y * 0.2, -40, 40); } // fall back to the clear avenue
     }
     m.position.set(x, y, GROUND);
     m.scale.setScalar(k); m.userData.giant = true;
@@ -84,9 +85,12 @@ function placePint(m, s) {
 }
 
 // ---------- Splashes: comic-style Hebrew one-liners that pop up when you drink
-const SPLASHES = ["זה ערב ללא תחתית", "יצא 145 שקל לכל אחד", "סלט טונה עם חלומי"], SPLASH_COLORS = ["#ffd23f", "#ff6b9d", "#5ee6a8", "#6cc7ff", "#ff9d3f"];
-let splashIdx = Math.floor(Math.random() * SPLASHES.length);
+const SPLASHES = ["זה ערב ללא תחתית", "יצא 145 שקל לכל אחד", "סלט טונה עם חלומי", "מי מסריח היום?", "אני דווקא אקח מיקס עצבני"], SPLASH_COLORS = ["#ffd23f", "#ff6b9d", "#5ee6a8", "#6cc7ff", "#ff9d3f"];
+let splashIdx = Math.floor(Math.random() * SPLASHES.length), lastSplash = 0;
 function splash(text, hold = 2300) {
+  const now = performance.now();
+  if (!text && (now - lastSplash < 1100 || document.querySelectorAll(".splash").length >= 2)) return; // throttle: no wall of text when chugging
+  lastSplash = now;
   const el = document.createElement("div"), side = Math.random() < 0.5 ? -1 : 1;
   el.className = "splash"; el.dir = "rtl"; if (params.has("splash")) { el.style.animationDelay = "-0.5s"; el.style.animationPlayState = "paused"; } el.textContent = text || SPLASHES[splashIdx++ % SPLASHES.length];
   el.style.setProperty("--c", SPLASH_COLORS[Math.floor(Math.random() * SPLASH_COLORS.length)]);
@@ -227,8 +231,10 @@ function step(dt) {
       if (!m.visible) { if (game.t > m.userData.respawn) placePint(m, s); continue; }
       if (m.userData.giant !== s.size >= GIANT_AT || m.position.distanceTo(p) > s.size * 9 + 40) { placePint(m, s); continue; }
       m.scale.setScalar(m.userData.giant ? s.size * 1.6 : Math.max(1, s.size * 0.9)); // beers keep growing with the dino
+      if (m.userData.table) m.position.x = m.userData.table.x + m.userData.side * 0.3 * m.scale.x;
       const top = m.position.z + 0.177 * m.scale.x;
-      if (Math.hypot(m.position.x - mouth.x, m.position.y - mouth.y) < 0.24 * s.size + 0.12 * m.scale.x && Math.abs(top - mouth.z) < 0.6 * s.size + 0.4) {
+      if (game.t - (game.lastDrink || -9) > 0.5 && Math.hypot(m.position.x - mouth.x, m.position.y - mouth.y) < 0.24 * s.size + 0.12 * m.scale.x && Math.abs(top - mouth.z) < 0.6 * s.size + 0.4) {
+        game.lastDrink = game.t; // one beer at a time: a short cooldown so a cluster can't be gulped in one frame
         setEvolution(game.e + (game.e < 2 ? 0.55 : game.e < 4 ? 0.5 : 0.4)); // two pints per stage
         if (m.userData.table) { // and the table goes flying, taking the other beer on it down too
           bar.topple(m.userData.table, p.x, p.y);

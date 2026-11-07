@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { fbm } from "./noise.js?v=mw6uc989";
+import { fbm } from "./noise.js?v=mw6uktv3";
 
 export const GROUND = -0.6;
 const ZUP = new THREE.Euler(Math.PI / 2, 0, 0);
@@ -185,7 +185,7 @@ export async function buildWorld(renderer, scene, progress = () => {}, opts = {}
   const plaza = new THREE.Mesh(new THREE.PlaneGeometry(60, 40), new THREE.MeshStandardMaterial({ ...pbr("square_tiles_03", 30, 20) }));
   plaza.position.z = GROUND + 0.01; plaza.receiveShadow = true; scene.add(plaza);
 
-  progress("Raising the towers");
+  const rand = rng(7);
   progress("Raising the towers");
   // ---------- City
   const facades = [
