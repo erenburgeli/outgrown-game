@@ -3,10 +3,10 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { stageValues, clamp } from "./stage.js?v=mw6tqqam";
-import { buildWorld, GROUND } from "./world.js?v=mw6tqqam";
-import { Dino } from "./dino.js?v=mw6tqqam";
-import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6tqqam";
+import { stageValues, clamp } from "./stage.js?v=mw6trojm";
+import { buildWorld, GROUND } from "./world.js?v=mw6trojm";
+import { Dino } from "./dino.js?v=mw6trojm";
+import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6trojm";
 
 const $ = (id) => document.getElementById(id);
 
@@ -96,16 +96,6 @@ function updateCue(p, s) {
   cue.classList.toggle("left", px > W - 190);
   cue.classList.toggle("near", bd < s.size * 1.2 + 2);
 }
-
-// ---------- WhatsApp share: a ready-made message with the link (the link preview shows the dino's face)
-function shareLink() {
-  const url = location.origin + location.pathname;
-  const msg = `🦖🍺 I'm a T-Rex with a human face chugging beers outside הספסל, and I'm ${fmt(1.18 * stageValues(game.e).size)} long. Think you can out-grow me?
-${url}`;
-  return "https://wa.me/?text=" + encodeURIComponent(msg);
-}
-for (const a of document.querySelectorAll("a.wa")) a.addEventListener("click", () => { a.href = shareLink(); });
-for (const a of document.querySelectorAll("a.wa")) a.href = shareLink();
 
 // ---------- Input: keyboard, on-screen arrows, drag to look
 const keys = new Set();

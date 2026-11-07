@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { fbm } from "./noise.js?v=mw6tqqam";
+import { fbm } from "./noise.js?v=mw6trojm";
 
 export const GROUND = -0.6;
 const ZUP = new THREE.Euler(Math.PI / 2, 0, 0);
