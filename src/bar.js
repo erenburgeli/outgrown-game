@@ -269,7 +269,7 @@ export function makePint() {
   bg.fillStyle = grad; bg.fillRect(0, 0, 4, 128);
   const beamMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(bc), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, opacity: 1 });
   beamMat.uniforms = { t: { value: 0 } };
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.1, 3.2, 20, 1, true), beamMat);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.045, 3.2, 20, 1, true), beamMat);
   beam.position.y = 1.7; beam.renderOrder = 3; beam.visible = true;
   const g = new THREE.Group();
   g.add(beer, foam, glass, label, beam);

@@ -3,10 +3,10 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { stageValues, clamp } from "./stage.js?v=mw6trojm";
-import { buildWorld, GROUND } from "./world.js?v=mw6trojm";
-import { Dino } from "./dino.js?v=mw6trojm";
-import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6trojm";
+import { stageValues, clamp } from "./stage.js?v=mw6u2el5";
+import { buildWorld, GROUND } from "./world.js?v=mw6u2el5";
+import { Dino } from "./dino.js?v=mw6u2el5";
+import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6u2el5";
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,19 +54,20 @@ creature.root.position.set(BAR.x + 2, BAR.y - 12, GROUND);
 // ---------- Food: pints on the bar's patio tables, then giant pints once it outgrows the patio
 // Dinosaur food: pints on the bar's patio tables, then giant pints once it outgrows the patio
 let bar = null;
+const GIANT_AT = 2.6; // past this size the beers are giant ones in the street, scaled to the dino
 const pints = Array.from({ length: 10 }, () => { const m = makePint(); m.visible = false; scene.add(m); return m; });
 function placePint(m, s) {
   m.userData.setBrand(BRANDS[Math.floor(Math.random() * BRANDS.length)]);
   m.userData.table = null;
-  if (s.size < 3 && bar) {
+  if (s.size < GIANT_AT && bar) {
     const free = [];
     for (const t of bar.standing()) for (const side of [-1, 1]) if (!pints.some((o) => o !== m && o.visible && o.userData.table === t && o.userData.side === side)) free.push([t, side]);
     if (!free.length) { m.visible = false; m.userData.respawn = game.t + 1; return; } // every table is knocked over: wait for the staff
     const [t, side] = free[Math.floor(Math.random() * free.length)];
     m.position.set(t.x + side * 0.22, t.y + (Math.random() - 0.5) * 0.2, t.z);
-    m.scale.setScalar(1); m.userData.giant = false; m.userData.table = t; m.userData.side = side;
+    m.scale.setScalar(Math.max(1, s.size * 0.9)); m.position.x = t.x + side * 0.22 * m.scale.x; m.userData.giant = false; m.userData.table = t; m.userData.side = side;
   } else {
-    const k = s.size * 1.6, ang = game.heading + (Math.random() - 0.5) * 2.4, dist = s.size * (1.4 + Math.random() * 3) + 3;
+    const k = s.size * 1.6, ang = game.heading + (Math.random() - 0.5) * 2.4, dist = s.size * (1.1 + Math.random() * 2.2) + 3;
     const p = creature.root.position;
     m.position.set(clamp(p.x + Math.cos(ang) * dist, -900, 1300), clamp(p.y + Math.sin(ang) * dist, -900, 900), GROUND);
     m.scale.setScalar(k); m.userData.giant = true;
@@ -202,15 +203,16 @@ function step(dt) {
     const mouth = creature.mouthWorld(tmp);
     for (const m of pints) {
       if (!m.visible) { if (game.t > m.userData.respawn) placePint(m, s); continue; }
-      if (m.userData.giant !== s.size >= 3 || m.position.distanceTo(p) > s.size * 9 + 40) { placePint(m, s); continue; }
-      const top = m.position.z + 0.17 * m.scale.x;
+      if (m.userData.giant !== s.size >= GIANT_AT || m.position.distanceTo(p) > s.size * 9 + 40) { placePint(m, s); continue; }
+      if (!m.userData.giant) m.scale.setScalar(Math.max(1, s.size * 0.9)); // patio beers grow with the dino
+      const top = m.position.z + 0.177 * m.scale.x;
       if (Math.hypot(m.position.x - mouth.x, m.position.y - mouth.y) < 0.18 * s.size + 0.12 * m.scale.x && Math.abs(top - mouth.z) < 0.5 * s.size + 0.4) {
         setEvolution(game.e + (game.e < 2 ? 0.55 : game.e < 4 ? 0.5 : 0.4)); // two pints per stage
         if (m.userData.table) { // and the table goes flying, taking the other beer on it down too
           bar.topple(m.userData.table, p.x, p.y);
           for (const o of pints) if (o !== m && o.visible && o.userData.table === m.userData.table) { o.visible = false; o.userData.respawn = game.t + 2; }
         }
-        m.visible = false; m.userData.respawn = game.t + (s.size < 3 ? 1.5 : 0.4);
+        m.visible = false; m.userData.respawn = game.t + (s.size < GIANT_AT ? 1.5 : 0.4);
         creature.gulp();
         toast(`${m.userData.brand.name}! ${["Chug!", "Lechaim!", "One more!", "Glug glug"][Math.floor(Math.random() * 4)]}`);
       }
