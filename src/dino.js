@@ -1,10 +1,10 @@
-// Dinosaur: the rigged, animated model built in Blender (assets/models/dino/dino.glb?v=mw6u2el5), plus
+// Dinosaur: the rigged, animated model built in Blender (assets/models/dino/dino.glb?v=mw6uc989), plus
 // procedural skin shading, secondary motion (breathing, head scan, tail sway, roar) and breath / dust particles.
 // Interface: root / fx / load() / update(e, t, moving, dt) / mouthWorld() / gulp() / roar().
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { stageValues } from "./stage.js?v=mw6u2el5";
-import { fbm } from "./noise.js?v=mw6u2el5";
+import { stageValues } from "./stage.js?v=mw6uc989";
+import { fbm } from "./noise.js?v=mw6uc989";
 
 function scaleBump() {
   const c = document.createElement("canvas"); c.width = c.height = 256;

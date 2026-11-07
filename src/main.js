@@ -3,10 +3,10 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { stageValues, clamp } from "./stage.js?v=mw6u2el5";
-import { buildWorld, GROUND } from "./world.js?v=mw6u2el5";
-import { Dino } from "./dino.js?v=mw6u2el5";
-import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6u2el5";
+import { stageValues, clamp } from "./stage.js?v=mw6uc989";
+import { buildWorld, GROUND } from "./world.js?v=mw6uc989";
+import { Dino } from "./dino.js?v=mw6uc989";
+import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6uc989";
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,12 +67,34 @@ function placePint(m, s) {
     m.position.set(t.x + side * 0.22, t.y + (Math.random() - 0.5) * 0.2, t.z);
     m.scale.setScalar(Math.max(1, s.size * 0.9)); m.position.x = t.x + side * 0.22 * m.scale.x; m.userData.giant = false; m.userData.table = t; m.userData.side = side;
   } else {
-    const k = s.size * 1.6, ang = game.heading + (Math.random() - 0.5) * 2.4, dist = s.size * (1.1 + Math.random() * 2.2) + 3;
-    const p = creature.root.position;
-    m.position.set(clamp(p.x + Math.cos(ang) * dist, -900, 1300), clamp(p.y + Math.sin(ang) * dist, -900, 900), GROUND);
+    // giant beers in the street, scaled to the dino, never inside a tower
+    const k = s.size * 1.6, p = creature.root.position;
+    let x = p.x, y = p.y;
+    for (let tries = 0; tries < 14; tries++) {
+      const ang = game.heading + (Math.random() - 0.5) * (tries < 8 ? 2.4 : 6.2), dist = s.size * (1.1 + Math.random() * 2.2) + 3;
+      x = clamp(p.x + Math.cos(ang) * dist, -900, 1300); y = clamp(p.y + Math.sin(ang) * dist, -900, 900);
+      const pad = k * 0.5 + 2;
+      if (!world || !world.buildings.some((b) => !b.state && Math.abs(x - b.x) < b.w / 2 + pad && Math.abs(y - b.y) < b.d / 2 + pad)) break;
+      if (tries === 13) { x = clamp(p.x + Math.cos(game.heading) * (s.size * 2 + 5), -100, 1250); y = clamp(p.y * 0.2, -40, 40); } // fall back to the clear avenue
+    }
+    m.position.set(x, y, GROUND);
     m.scale.setScalar(k); m.userData.giant = true;
   }
   m.visible = true; m.userData.respawn = 0;
+}
+
+// ---------- Splashes: comic-style Hebrew one-liners that pop up when you drink
+const SPLASHES = ["זה ערב ללא תחתית", "יצא 145 שקל לכל אחד", "סלט טונה עם חלומי"], SPLASH_COLORS = ["#ffd23f", "#ff6b9d", "#5ee6a8", "#6cc7ff", "#ff9d3f"];
+let splashIdx = Math.floor(Math.random() * SPLASHES.length);
+function splash(text, hold = 2300) {
+  const el = document.createElement("div"), side = Math.random() < 0.5 ? -1 : 1;
+  el.className = "splash"; el.dir = "rtl"; if (params.has("splash")) { el.style.animationDelay = "-0.5s"; el.style.animationPlayState = "paused"; } el.textContent = text || SPLASHES[splashIdx++ % SPLASHES.length];
+  el.style.setProperty("--c", SPLASH_COLORS[Math.floor(Math.random() * SPLASH_COLORS.length)]);
+  el.style.setProperty("--r", `${(Math.random() * 14 - 7).toFixed(1)}deg`);
+  el.style.left = `${50 + side * (4 + Math.random() * 9)}%`; el.style.top = `${34 + Math.random() * 28}%`;
+  if (hold > 2300) { el.classList.add("final"); el.style.left = "50%"; el.style.top = "42%"; el.style.setProperty("--r", "-3deg"); el.style.animationDuration = `${hold}ms`; }
+  document.body.appendChild(el);
+  if (!params.has("splash")) setTimeout(() => el.remove(), hold);
 }
 
 // ---------- Cue: a marker over the nearest beer (or an arrow at the screen edge pointing to it) with the distance
@@ -204,9 +226,9 @@ function step(dt) {
     for (const m of pints) {
       if (!m.visible) { if (game.t > m.userData.respawn) placePint(m, s); continue; }
       if (m.userData.giant !== s.size >= GIANT_AT || m.position.distanceTo(p) > s.size * 9 + 40) { placePint(m, s); continue; }
-      if (!m.userData.giant) m.scale.setScalar(Math.max(1, s.size * 0.9)); // patio beers grow with the dino
+      m.scale.setScalar(m.userData.giant ? s.size * 1.6 : Math.max(1, s.size * 0.9)); // beers keep growing with the dino
       const top = m.position.z + 0.177 * m.scale.x;
-      if (Math.hypot(m.position.x - mouth.x, m.position.y - mouth.y) < 0.18 * s.size + 0.12 * m.scale.x && Math.abs(top - mouth.z) < 0.5 * s.size + 0.4) {
+      if (Math.hypot(m.position.x - mouth.x, m.position.y - mouth.y) < 0.24 * s.size + 0.12 * m.scale.x && Math.abs(top - mouth.z) < 0.6 * s.size + 0.4) {
         setEvolution(game.e + (game.e < 2 ? 0.55 : game.e < 4 ? 0.5 : 0.4)); // two pints per stage
         if (m.userData.table) { // and the table goes flying, taking the other beer on it down too
           bar.topple(m.userData.table, p.x, p.y);
@@ -215,12 +237,15 @@ function step(dt) {
         m.visible = false; m.userData.respawn = game.t + (s.size < GIANT_AT ? 1.5 : 0.4);
         creature.gulp();
         toast(`${m.userData.brand.name}! ${["Chug!", "Lechaim!", "One more!", "Glug glug"][Math.floor(Math.random() * 4)]}`);
+        splash();
       }
     }
   }
 
   for (const m of pints) if (m.visible) m.userData.beamMat.opacity = Math.min(1, Math.max(0, (camera.position.distanceTo(m.position) / m.scale.x - 1.5) / 3), Math.max(0, (Math.hypot(m.position.x - p.x, m.position.y - p.y) - s.size * 0.9) / (s.size * 2 + 1))) * (0.85 + 0.15 * Math.sin(game.t * 3 + m.id));
   updateCue(p, s);
+  if (game.e >= 4.98 && !game.finalShown) { game.finalShown = true; splash("טופז אני יוצא הביתה", 7000); } // fully grown
+  else if (game.e < 4.5) game.finalShown = false;
   s = stageValues(game.e);
   creature.update(game.e, game.t, game.moving, dt, game.vel < -0.05 ? -1 : 1);
   world.update(game.t, s, dt);
@@ -322,6 +347,8 @@ Promise.all([buildWorld(renderer, scene, (msg) => ($("loadline").textContent = m
   if (q.has("pintshot")) { const pm = pints.find((o) => o.visible && o.userData.table); game.freeze = { pos: pm.position.clone().add(new THREE.Vector3(0.5, -0.55, 0.16)), look: pm.position.clone().add(new THREE.Vector3(0, 0, 0.09)) }; }
   if (q.has("hidehud")) document.head.insertAdjacentHTML("beforeend", "<style>.hud,#cue,#toast,#intro{display:none!important}</style>");
   if (q.has("faceshot")) { const mo = creature.mouthWorld(new THREE.Vector3()), h = game.heading, sz = stageValues(game.e).size; game.freeze = { pos: new THREE.Vector3(mo.x + Math.cos(h + 0.5) * 1.15 * sz, mo.y + Math.sin(h + 0.5) * 1.15 * sz, mo.z + 0.02 * sz), look: new THREE.Vector3(mo.x - Math.cos(h) * 0.12 * sz, mo.y - Math.sin(h) * 0.12 * sz, mo.z + 0.02 * sz) }; creature.roar(); }
+  if (q.has("splash")) { splash(); splash(); }
+  if (q.has("final")) game.finalShown = false;
   if (q.has("autostart")) start();
 }).catch((err) => {
   $("loadline").textContent = `Could not load the scene: ${err.message}. Run "npm run assets" and reload.`;
