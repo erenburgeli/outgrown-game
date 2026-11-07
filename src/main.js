@@ -3,10 +3,10 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { stageValues, clamp } from "./stage.js?v=mw6uktv3";
-import { buildWorld, GROUND } from "./world.js?v=mw6uktv3";
-import { Dino } from "./dino.js?v=mw6uktv3";
-import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6uktv3";
+import { stageValues, clamp } from "./stage.js?v=mw6umg3y";
+import { buildWorld, GROUND } from "./world.js?v=mw6umg3y";
+import { Dino } from "./dino.js?v=mw6umg3y";
+import { buildBar, makePint, BRANDS } from "./bar.js?v=mw6umg3y";
 
 const $ = (id) => document.getElementById(id);
 
@@ -164,8 +164,10 @@ addEventListener("keydown", (ev) => { if ((ev.ctrlKey || ev.metaKey) && ["+", "=
 // sandbox evolution control
 const evo = $("evo");
 function setEvolution(v) {
-  game.e = clamp(v, 0, 5);
+  game.e = game.target = clamp(v, 0, 5); // instant (slider, keys, test URLs)
 }
+// beers raise a target and the dino glides to it: past stage 4 size grows exponentially, so a jump would be a 4x leap in one frame
+function growTo(delta) { game.target = clamp((game.target ?? game.e) + delta, 0, 5); }
 evo.addEventListener("input", () => setEvolution(parseFloat(evo.value)));
 $("evolve").addEventListener("click", () => setEvolution(Math.floor(game.e * 4 + 1e-6) / 4 + 0.25));
 $("devolve").addEventListener("click", () => setEvolution(Math.ceil(game.e * 4 - 1e-6) / 4 - 0.25));
@@ -206,6 +208,10 @@ function step(dt) {
   const trn = (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0);
   const evolveKey = (keys.has("plus") ? 1 : 0) - (keys.has("minus") ? 1 : 0);
   if (evolveKey) setEvolution(game.e + evolveKey * dt * 0.4);
+  if (game.target !== undefined && game.target !== game.e) { // glide toward the target size
+    const rate = game.e < 4 ? 0.6 : 0.28;
+    game.e += clamp(game.target - game.e, -rate * dt, rate * dt);
+  }
 
   // ease into and out of turning and walking instead of snapping on and off
   const turnRate = game.e < 1 ? 2.0 : game.e < 4 ? 1.4 : 1.0;
@@ -235,7 +241,7 @@ function step(dt) {
       const top = m.position.z + 0.177 * m.scale.x;
       if (game.t - (game.lastDrink || -9) > 0.5 && Math.hypot(m.position.x - mouth.x, m.position.y - mouth.y) < 0.24 * s.size + 0.12 * m.scale.x && Math.abs(top - mouth.z) < 0.6 * s.size + 0.4) {
         game.lastDrink = game.t; // one beer at a time: a short cooldown so a cluster can't be gulped in one frame
-        setEvolution(game.e + (game.e < 2 ? 0.55 : game.e < 4 ? 0.5 : 0.4)); // two pints per stage
+        growTo(game.e < 2 ? 0.55 : game.e < 4 ? 0.5 : 0.35); // two pints per stage
         if (m.userData.table) { // and the table goes flying, taking the other beer on it down too
           bar.topple(m.userData.table, p.x, p.y);
           for (const o of pints) if (o !== m && o.visible && o.userData.table === m.userData.table) { o.visible = false; o.userData.respawn = game.t + 2; }
@@ -302,7 +308,7 @@ let world;
 const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(0.05, clock.getDelta());
-  if (world) step(game.started ? dt : dt * 0.6);
+  if (world) { try { step(game.started ? dt : dt * 0.6); } catch (err) { if (!game.errored) { game.errored = true; console.error(err); } } } // one bad frame must never freeze the game
   composer.render();
   requestAnimationFrame(frame);
 }
@@ -355,6 +361,7 @@ Promise.all([buildWorld(renderer, scene, (msg) => ($("loadline").textContent = m
   if (q.has("faceshot")) { const mo = creature.mouthWorld(new THREE.Vector3()), h = game.heading, sz = stageValues(game.e).size; game.freeze = { pos: new THREE.Vector3(mo.x + Math.cos(h + 0.5) * 1.15 * sz, mo.y + Math.sin(h + 0.5) * 1.15 * sz, mo.z + 0.02 * sz), look: new THREE.Vector3(mo.x - Math.cos(h) * 0.12 * sz, mo.y - Math.sin(h) * 0.12 * sz, mo.z + 0.02 * sz) }; creature.roar(); }
   if (q.has("splash")) { splash(); splash(); }
   if (q.has("final")) game.finalShown = false;
+  if (q.has("pump")) { for (let i = 0; i < parseInt(q.get("pump")); i++) growTo(0.4); for (let i = 0; i < 200; i++) step(1 / 60); }
   if (q.has("autostart")) start();
 }).catch((err) => {
   $("loadline").textContent = `Could not load the scene: ${err.message}. Run "npm run assets" and reload.`;
