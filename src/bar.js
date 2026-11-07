@@ -237,24 +237,49 @@ function labelTexture(b) {
 }
 
 // a pint with a brand label (scale it up for giant servings); holder.userData.setBrand(brand) re-pours it
+// A proper pint: lathe-turned glass with a thick base and flared rim, beer filling the inside, a domed creamy head,
+// a curved brand label on the front and a glowing beacon so you can spot it from across the plaza.
+function glassProfile() {
+  const outer = [[0, 0], [0.027, 0], [0.030, 0.002], [0.0315, 0.006], [0.0325, 0.02], [0.0355, 0.05], [0.040, 0.09], [0.0445, 0.125], [0.0485, 0.152], [0.0505, 0.168], [0.0508, 0.1715]];
+  return outer.map(([r, y]) => new THREE.Vector2(r, y));
+}
 export function makePint() {
+  const T = 0.0024, outer = glassProfile();
+  const inner = outer.slice(2).map((p) => new THREE.Vector2(Math.max(0.0001, p.x - T), Math.max(p.y, 0.011) + (p.y < 0.011 ? 0 : 0)));
+  inner[0].set(inner[0].x, 0.011); inner[1].set(inner[1].x, 0.011);
+  const wall = [...outer, new THREE.Vector2(0.0508 - T, 0.1715), ...inner.slice(2).reverse(), new THREE.Vector2(0.0001, 0.011)];
+  const glass = new THREE.Mesh(new THREE.LatheGeometry(wall, 40),
+    new THREE.MeshPhysicalMaterial({ color: 0xdfe8ee, roughness: 0.02, metalness: 0, transparent: true, opacity: 0.07, clearcoat: 1, clearcoatRoughness: 0.02, ior: 1.5, envMapIntensity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+  glass.renderOrder = 2;
+  const beerProf = []; for (const p of inner) if (p.y <= 0.146) beerProf.push(new THREE.Vector2(p.x - 0.0004, p.y));
+  const rTop = inner.find((p) => p.y >= 0.146)?.x ?? 0.045;
+  beerProf.push(new THREE.Vector2(rTop - 0.0004, 0.146), new THREE.Vector2(0.0001, 0.146));
+  const beerMat = new THREE.MeshPhysicalMaterial({ color: 0xe0961c, emissive: 0x6a3a00, emissiveIntensity: 0.6, roughness: 0.35, transmission: 0, clearcoat: 0, envMapIntensity: 0.3 });
+  const beer = new THREE.Mesh(new THREE.LatheGeometry(beerProf, 40), beerMat);
+  const foamMat = new THREE.MeshStandardMaterial({ color: 0xfffaf0, roughness: 0.95 });
+  const foamProf = [new THREE.Vector2(rTop - 0.0004, 0.145), new THREE.Vector2(rTop + 0.0004, 0.158), new THREE.Vector2(rTop - 0.002, 0.168), new THREE.Vector2(rTop - 0.009, 0.1745), new THREE.Vector2(rTop - 0.02, 0.1765), new THREE.Vector2(0.0001, 0.177)];
+  const foam = new THREE.Mesh(new THREE.LatheGeometry(foamProf, 40), foamMat);
+  const labelMat = new THREE.MeshStandardMaterial({ roughness: 0.45, transparent: true, side: THREE.FrontSide });
+  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0432, 0.0392, 0.055, 24, 1, true, -0.9, 1.8), labelMat);
+  label.position.y = 0.06;
+  // golden light beam: bright at the glass, fading out toward the sky
+  const bc = document.createElement("canvas"); bc.width = 4; bc.height = 128;
+  const bg = bc.getContext("2d"), grad = bg.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, "rgba(255,190,80,0)"); grad.addColorStop(0.6, "rgba(255,190,80,0.25)"); grad.addColorStop(1, "rgba(255,200,90,0.85)");
+  bg.fillStyle = grad; bg.fillRect(0, 0, 4, 128);
+  const beamMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(bc), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, opacity: 1 });
+  beamMat.uniforms = { t: { value: 0 } };
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.1, 3.2, 20, 1, true), beamMat);
+  beam.position.y = 1.7; beam.renderOrder = 3; beam.visible = true;
   const g = new THREE.Group();
-  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.042, 0.17, 20, 1, true),
-    new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.03, transparent: true, opacity: 0.25, envMapIntensity: 2, side: THREE.DoubleSide }));
-  const beerMat = new THREE.MeshStandardMaterial({ color: 0xe0961c, emissive: 0x6a3a00, emissiveIntensity: 0.5, roughness: 0.15 });
-  const beer = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.039, 0.135, 20), beerMat);
-  const foamMat = new THREE.MeshStandardMaterial({ color: 0xfffaf0, roughness: 0.9 });
-  const foam = new THREE.Mesh(new THREE.CylinderGeometry(0.049, 0.047, 0.03, 20), foamMat);
-  const labelMat = new THREE.MeshStandardMaterial({ roughness: 0.5 });
-  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0475, 0.044, 0.05, 24, 1, true), labelMat);
-  beer.position.y = -0.012; foam.position.y = 0.07; label.position.y = -0.01;
-  g.add(glass, beer, foam, label);
-  g.rotation.x = Math.PI / 2; // cylinders are Y-up; the game is Z-up
-  const holder = new THREE.Group(); holder.add(g); g.position.z = 0.085;
-  holder.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  g.add(beer, foam, glass, label, beam);
+  g.rotation.x = Math.PI / 2; // lathe geometry is Y-up; the game is Z-up
+  const holder = new THREE.Group(); holder.add(g); g.position.z = 0.0;
+  holder.traverse((o) => { if (o.isMesh && o !== beam) o.castShadow = true; });
+  holder.userData.beamMat = beamMat; holder.userData.beam = beam;
   holder.userData.setBrand = (b) => {
     holder.userData.brand = b;
-    beerMat.color.setHex(b.beer); beerMat.emissive.setHex(b.beer).multiplyScalar(0.35);
+    beerMat.color.setHex(b.beer); beerMat.emissive.setHex(b.beer).multiplyScalar(0.3);
     foamMat.color.setHex(b.foam); labelMat.map = labelTexture(b); labelMat.needsUpdate = true;
   };
   holder.userData.setBrand(BRANDS[0]);

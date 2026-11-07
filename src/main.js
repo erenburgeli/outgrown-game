@@ -54,16 +54,17 @@ creature.root.position.set(BAR.x + 2, BAR.y - 12, GROUND);
 // ---------- Food: pints on the bar's patio tables, then giant pints once it outgrows the patio
 // Dinosaur food: pints on the bar's patio tables, then giant pints once it outgrows the patio
 let bar = null;
-const pints = Array.from({ length: 5 }, () => { const m = makePint(); m.visible = false; scene.add(m); return m; });
+const pints = Array.from({ length: 10 }, () => { const m = makePint(); m.visible = false; scene.add(m); return m; });
 function placePint(m, s) {
   m.userData.setBrand(BRANDS[Math.floor(Math.random() * BRANDS.length)]);
   m.userData.table = null;
   if (s.size < 3 && bar) {
-    const free = bar.standing().filter((t) => !pints.some((o) => o !== m && o.visible && o.userData.table === t));
+    const free = [];
+    for (const t of bar.standing()) for (const side of [-1, 1]) if (!pints.some((o) => o !== m && o.visible && o.userData.table === t && o.userData.side === side)) free.push([t, side]);
     if (!free.length) { m.visible = false; m.userData.respawn = game.t + 1; return; } // every table is knocked over: wait for the staff
-    const t = free[Math.floor(Math.random() * free.length)];
-    m.position.set(t.x + (Math.random() - 0.5) * 0.4, t.y + (Math.random() - 0.5) * 0.4, t.z);
-    m.scale.setScalar(1); m.userData.giant = false; m.userData.table = t;
+    const [t, side] = free[Math.floor(Math.random() * free.length)];
+    m.position.set(t.x + side * 0.22, t.y + (Math.random() - 0.5) * 0.2, t.z);
+    m.scale.setScalar(1); m.userData.giant = false; m.userData.table = t; m.userData.side = side;
   } else {
     const k = s.size * 1.6, ang = game.heading + (Math.random() - 0.5) * 2.4, dist = s.size * (1.4 + Math.random() * 3) + 3;
     const p = creature.root.position;
@@ -71,6 +72,29 @@ function placePint(m, s) {
     m.scale.setScalar(k); m.userData.giant = true;
   }
   m.visible = true; m.userData.respawn = 0;
+}
+
+// ---------- Cue: a marker over the nearest beer (or an arrow at the screen edge pointing to it) with the distance
+const cue = document.getElementById("cue"), cueArrow = cue.querySelector("i"), cueText = cue.querySelector("b");
+const cueV = new THREE.Vector3();
+function updateCue(p, s) {
+  let best = null, bd = 1e9;
+  for (const m of pints) if (m.visible) { const d = Math.hypot(m.position.x - p.x, m.position.y - p.y); if (d < bd) { bd = d; best = m; } }
+  if (!best || !game.started) { cue.hidden = true; return; }
+  cue.hidden = false;
+  cueV.set(best.position.x, best.position.y, best.position.z + 0.3 * best.scale.x * 4 + 0.4).project(camera);
+  const behind = cueV.z > 1, W = innerWidth, H = innerHeight;
+  let x = cueV.x, y = cueV.y;
+  if (behind) { x = -x; y = -y; }
+  const inside = !behind && Math.abs(x) < 0.92 && Math.abs(y) < 0.85;
+  if (!inside) { const k = Math.max(Math.abs(x) / 0.9, Math.abs(y) / 0.8, 1e-3); x /= k; y /= k; if (behind && Math.abs(x) < 0.05) x = 0.9 * Math.sign(x || 1); }
+  const px = (x * 0.5 + 0.5) * W, py = (-y * 0.5 + 0.5) * H;
+  cue.style.transform = `translate(${px}px,${py}px)`;
+  cueArrow.style.transform = inside ? "rotate(90deg)" : `rotate(${Math.atan2(-y, x) * 180 / Math.PI}deg)`;
+  const label = best.userData.table ? "הספסל" : "beer";
+  cueText.textContent = `${label} · ${bd < 10 ? bd.toFixed(1) : Math.round(bd)} m`;
+  cue.classList.toggle("left", px > W - 190);
+  cue.classList.toggle("near", bd < s.size * 1.2 + 2);
 }
 
 // ---------- Input: keyboard, on-screen arrows, drag to look
@@ -121,7 +145,7 @@ $("devolve").addEventListener("click", () => setEvolution(Math.ceil(game.e * 4 -
 
 // ---------- HUD
 const STAGES = [
-  ["Hatchling", "Waddle over to הספסל and chug the beers on the patio tables."],
+  ["Hatchling", "Follow the golden beams to הספסל and chug the beers."],
   ["Thirsty dino", "Keep chugging. The bar keeps pouring."],
   ["Regular at the bar", "Too big for the patio now. The beers come bigger."],
   ["Stomper", "Keep eating. Those arms are not getting any longer."],
@@ -181,8 +205,11 @@ function step(dt) {
       if (m.userData.giant !== s.size >= 3 || m.position.distanceTo(p) > s.size * 9 + 40) { placePint(m, s); continue; }
       const top = m.position.z + 0.17 * m.scale.x;
       if (Math.hypot(m.position.x - mouth.x, m.position.y - mouth.y) < 0.18 * s.size + 0.12 * m.scale.x && Math.abs(top - mouth.z) < 0.5 * s.size + 0.4) {
-        setEvolution(game.e + (game.e < 2 ? 0.3 : game.e < 4 ? 0.28 : 0.2)); // a few pints per stage
-        if (m.userData.table) bar.topple(m.userData.table, p.x, p.y);       // and the table goes flying
+        setEvolution(game.e + (game.e < 2 ? 0.55 : game.e < 4 ? 0.5 : 0.4)); // two pints per stage
+        if (m.userData.table) { // and the table goes flying, taking the other beer on it down too
+          bar.topple(m.userData.table, p.x, p.y);
+          for (const o of pints) if (o !== m && o.visible && o.userData.table === m.userData.table) { o.visible = false; o.userData.respawn = game.t + 2; }
+        }
         m.visible = false; m.userData.respawn = game.t + (s.size < 3 ? 1.5 : 0.4);
         creature.gulp();
         toast(`${m.userData.brand.name}! ${["Chug!", "Lechaim!", "One more!", "Glug glug"][Math.floor(Math.random() * 4)]}`);
@@ -190,6 +217,8 @@ function step(dt) {
     }
   }
 
+  for (const m of pints) if (m.visible) m.userData.beamMat.opacity = Math.min(1, Math.max(0, (camera.position.distanceTo(m.position) / m.scale.x - 1.5) / 3), Math.max(0, (Math.hypot(m.position.x - p.x, m.position.y - p.y) - s.size * 0.9) / (s.size * 2 + 1))) * (0.85 + 0.15 * Math.sin(game.t * 3 + m.id));
+  updateCue(p, s);
   s = stageValues(game.e);
   creature.update(game.e, game.t, game.moving, dt, game.vel < -0.05 ? -1 : 1);
   world.update(game.t, s, dt);
@@ -220,6 +249,7 @@ function step(dt) {
   camera.position.lerp(desired, 1 - Math.exp(-9 * dt));
   lookAt.lerp(look, 1 - Math.exp(-12 * dt));
   camera.lookAt(lookAt);
+  if (game.freeze) { camera.position.copy(game.freeze.pos); camera.lookAt(game.freeze.look); }
   const shake = (world.shake + creature.shake * 0.5) * s.size * 0.02; // falling towers rattle the view
   if (shake > 0.001) camera.position.add(new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake));
 
@@ -287,6 +317,7 @@ Promise.all([buildWorld(renderer, scene, (msg) => ($("loadline").textContent = m
     }
   }
   if (q.has("roar")) { creature.roar(); for (let i = 0; i < 70; i++) step(1 / 60); }
+  if (q.has("pintshot")) { const pm = pints.find((o) => o.visible && o.userData.table); game.freeze = { pos: pm.position.clone().add(new THREE.Vector3(0.5, -0.55, 0.16)), look: pm.position.clone().add(new THREE.Vector3(0, 0, 0.09)) }; }
   if (q.has("autostart")) start();
 }).catch((err) => {
   $("loadline").textContent = `Could not load the scene: ${err.message}. Run "npm run assets" and reload.`;
